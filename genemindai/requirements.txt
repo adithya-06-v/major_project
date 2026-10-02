@@ -1,0 +1,12 @@
+biopython
+pandas
+numpy
+scikit-learn
+xgboost
+shap
+matplotlib
+fastapi
+uvicorn
+python-multipart
+httpx
+pytest

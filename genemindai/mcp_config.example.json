@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "hatchable": {
+      "serverUrl": "https://hatchable.com/mcp",
+      "url": "https://hatchable.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_HATCHABLE_API_KEY>"
+      }
+    }
+  }
+}

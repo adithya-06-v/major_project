@@ -1,0 +1,135 @@
+GENEMINDAI PROJECT BRIEF
+Presentation planning notes
+
+PROJECT AT A GLANCE
+GeneMindAI is a prototype for analyzing DNA sequences from the HBB gene (the gene that encodes beta-globin, a component of hemoglobin). It combines sequence validation, k-mer feature extraction, a machine-learning classifier, and a web interface/API.
+
+Important scope distinction:
+- The currently configured baseline model is binary: Healthy versus Beta Thalassemia.
+- The project has separate folders for Beta Thalassemia, Sickle Cell Disease, Hemoglobin E Disease, and Hemoglobin C Disease, plus an experimental training script.
+- Those four disease-folder CSVs are labeled synthetic_test examples. They are not patient records or validated clinical datasets.
+- A five-class model has not been trained and verified in the current environment. Do not present the current website as already identifying five classes.
+- This is an educational/software prototype, not a medical device. Its outputs must not be used for diagnosis, treatment, or clinical decisions.
+
+WHAT THE PROJECT DOES
+1. A user pastes a DNA sequence or uploads a FASTA/text file in the frontend.
+2. The frontend removes whitespace, uppercases the bases, and checks that the sequence contains only A, T, C, G, or N.
+3. The frontend sends the sequence as JSON to the FastAPI backend at POST /predict.
+4. The backend validates the DNA sequence again. Invalid input is rejected with an HTTP 400 response.
+5. The prediction service computes sequence statistics such as sequence length, GC content, and AT content.
+6. It converts the sequence into normalized frequencies of overlapping 3-base k-mers. The resulting features are aligned to the saved feature_columns.json order.
+7. The trained Random Forest model produces a class and probability/confidence value.
+8. The API returns the prediction, confidence, sequence statistics, model name, and timestamp. The frontend displays the result.
+9. The backend may request an additional server-side clinical insight from the configured Hatchable service. This text is not a replacement for clinical review and must not be confused with the classifier's evidence.
+
+CURRENT BASELINE CLASSIFICATION
+- Class 0: Healthy (in the curated builder, reviewed benign HBB variants/controls)
+- Class 1: Beta Thalassemia
+- Model artifact: ai/models/random_forest.pkl
+- Default baseline training table: dataset/processed/expanded_feature_dataset.csv
+- Feature schema: ai/models/feature_columns.json
+
+DATA SOURCES AND DATA PREPARATION
+A. ClinVar-derived HBB dataset builder
+- Script: scripts/build_clinvar_dataset.py
+- Source: ClinVar records fetched from the NCBI E-utilities API.
+- Reference sequence: dataset/healthy/hbb_gene.fasta; the project also contains NCBI RefSeq/GenBank HBB reference material.
+- The script keeps reviewed records with supported review statuses and classifies reviewed benign records as controls. A positive record must be pathogenic/likely pathogenic, associated with a beta-thalassemia trait, and not also annotated with a sickle trait under the current filter.
+- The current variant mapping implementation supports single-nucleotide substitutions (SNVs) that can be mapped safely to the HBB reference. It skips unsupported, uncertain, conflicting, or unmappable records.
+- Outputs: dataset/processed/clinvar_hbb_dataset.csv and dataset/processed/clinvar_hbb_feature_dataset.csv.
+- This builder currently creates a binary beta-thalassemia-vs-control dataset. It is not a four-disease dataset.
+
+B. Existing baseline model data
+- The baseline trainer defaults to dataset/processed/expanded_feature_dataset.csv.
+- The model is binary and the API maps its outputs to Healthy or Beta Thalassemia.
+- Before claiming that the deployed model was trained from ClinVar, verify its training history/artifact provenance. The presence of a ClinVar dataset builder does not prove that the saved model was trained on its output.
+
+C. Disease-specific sample folders
+- dataset/diseases/beta_thalassemia/
+- dataset/diseases/sickle_cell_disease/
+- dataset/diseases/hemoglobin_e/
+- dataset/diseases/hemoglobin_c_disease/
+- Each folder contains a sample_test_dataset.csv. Its source column marks the rows synthetic_test.
+- These examples are useful for UI, file-format, and pipeline experiments only. They do not represent ClinVar-curated patient sequences and do not establish that a classifier can distinguish the diseases.
+
+D. Experimental multiclass trainer
+- Script: scripts/train_multidisease_model.py
+- It expects the four disease-specific folders, labels their rows by disease, and is designed to save a separate model under ai/models/multidisease/.
+- Training on synthetic_test data requires the explicit --allow-synthetic-test-data flag and prints a non-clinical-use warning.
+- The experimental artifact is not present as an active, verified model in this environment. An attempted startup of the existing Random Forest artifact failed because Windows Application Control blocked a scikit-learn native DLL. Resolve the approved runtime/dependency issue and run/validate the trainer before claiming the multiclass model works.
+- The experimental trainer combines 500 synthetic Healthy/control rows (label 0) from `dataset/processed/expanded_dataset.csv` with 100 rows from each of the four disease folders: 900 samples across five labels total. All are test fixtures, not validated clinical examples.
+
+TECHNOLOGY
+- Frontend: React, TypeScript, Vite, Tailwind CSS.
+- Backend: Python, FastAPI, Pydantic, Uvicorn.
+- Machine learning/data: scikit-learn, Random Forest, pandas, joblib.
+- Sequence processing: custom DNA validation and k-mer encoding utilities; Biopython is used in reference-data workflows.
+- Explainability: SHAP tooling and report image paths are present in the project. Only show explainability plots if their model/data provenance is known and the files load correctly.
+
+WHAT TO SAY ABOUT THE CURRENT RUNTIME
+During the latest local test, GET / returned HTTP 200, so the API process was reachable. POST /predict returned HTTP 500 with "Predictor service is not initialized." Direct model initialization showed Windows Application Control blocked the scikit-learn DLL _expected_mutual_info_fast. This is an environment/model-loading failure, not evidence that the submitted DNA sequence was invalid. The backend must load a model successfully before sequence analysis can run.
+
+SUGGESTED PRESENTATION OUTLINE
+Slide 1 - Title
+GeneMindAI: HBB DNA Sequence Analysis Prototype
+Subtitle: Sequence processing and experimental disease classification
+
+Slide 2 - Problem and motivation
+Explain that inherited hemoglobin disorders can involve variants in globin genes. State that this prototype focuses on HBB and explores how sequence features could support variant classification. Avoid claiming clinical utility.
+
+Slide 3 - Project scope
+Show the distinction between the implemented baseline (Healthy vs Beta Thalassemia) and the planned/experimental five-class test model (Healthy, Beta Thalassemia, Sickle Cell Disease, Hemoglobin E Disease, and Hemoglobin C Disease). The five-class model is not currently trained or operational.
+
+Slide 4 - End-to-end architecture
+Diagram: FASTA/text input -> React frontend validation -> FastAPI POST /predict -> DNA validation/statistics -> 3-mer encoding -> Random Forest -> JSON response -> result display.
+
+Slide 5 - Data and provenance
+Show two separate lanes: (1) ClinVar/NCBI-reviewed HBB data pipeline for the binary beta-thalassemia/control task; (2) 500 synthetic Healthy/control examples plus the 400 synthetic disease-folder rows for five-class software testing. Clearly label the second lane synthetic and non-clinical.
+
+Slide 6 - Sequence feature engineering
+Explain overlapping 3-mers with a short example such as ATGCTA -> ATG, TGC, GCT, CTA. Their normalized frequencies form the model feature vector. Mention that feature order must match the saved schema.
+
+Slide 7 - Model and output
+Describe the baseline Random Forest binary classifier and the API fields: class label, confidence, sequence length, GC%, AT%, model name, and timestamp. Do not invent accuracy or clinical sensitivity/specificity; retrieve the correct evaluation report and dataset version before adding metrics.
+
+Slide 8 - Website demonstration
+Show sequence upload/paste, base validation, analysis request, prediction result, confidence, and sequence statistics. If backend model loading is unresolved, show the interface flow and transparently report the current 500 startup issue instead of presenting a successful live result.
+
+Slide 9 - Limitations and risks
+- Current baseline is binary, and the five-class test model is not yet trained or clinically validated.
+- Synthetic fixtures are not clinical evidence and can produce misleadingly easy or meaningless scores.
+- A single sequence/class label may not capture genotype, zygosity, compound variants, phenotype, or clinical context.
+- HBB-focused input cannot establish all causes of anemia or other genetic disease.
+- Model confidence is not clinical certainty.
+- The local model currently requires a working, policy-approved scikit-learn runtime.
+
+Slide 10 - Next steps
+1. Resolve the blocked scikit-learn model-loading dependency in an approved environment.
+2. Collect disease-specific, reviewed HBB variants from ClinVar or another documented source, retaining accession, review status, condition, variant, and reference build.
+3. Define mutually exclusive class-label rules and explicitly handle variants associated with multiple conditions.
+4. Generate sequence examples by applying verified variants to the correct HBB reference and validate all mappings.
+5. Use independent variant positions or an external holdout set to prevent leakage between train and test partitions.
+6. Train the multiclass model, evaluate per-class precision/recall/F1, confusion matrix, and calibration, then verify the API and website end to end.
+7. Seek genetics/clinical review before making any clinical claims.
+
+PRESENTATION CHECKLIST
+- Use the phrase "experimental prototype" rather than "diagnostic engine."
+- Label synthetic datasets clearly on every slide where they appear.
+- Do not imply that the disease folders contain real patient data.
+- Do not claim four-disease detection is operational until a multiclass model is trained, loaded, and tested with independent validated data.
+- Do not invent performance metrics. Cite dataset version, split strategy, sample counts, and evaluation output if metrics are included.
+- Include a visible statement: "For research/software testing only; not for medical diagnosis."
+
+RELEVANT PROJECT FILES
+- README.md
+- backend/main.py
+- backend/schemas.py
+- backend/services/predictor.py
+- ai/training/train_baseline_models.py
+- scripts/build_clinvar_dataset.py
+- scripts/train_multidisease_model.py
+- dna_processing/feature_extraction/kmer_encoder.py
+- dataset/processed/clinvar_hbb_dataset.csv
+- dataset/processed/clinvar_hbb_feature_dataset.csv
+- dataset/diseases/
+- ../geneminai-frontend/src/components/AnalysisExperience.tsx
